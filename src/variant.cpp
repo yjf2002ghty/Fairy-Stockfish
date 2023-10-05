@@ -468,9 +468,7 @@ namespace {
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
         v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
-        v->extinctionValue = -VALUE_MATE;
-        v->extinctionPieceTypes = piece_set(COMMONER);
-        v->extinctionPseudoRoyal = true;
+        v->pseudoRoyalTypes = piece_set(COMMONER);
         v->petrifyOnCaptureTypes = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         return v;
     }
@@ -492,7 +490,7 @@ namespace {
     // https://en.wikipedia.org/wiki/Atomic_chess
     Variant* atomic_variant() {
         Variant* v = nocheckatomic_variant()->init();
-        v->extinctionPseudoRoyal = true;
+        v->pseudoRoyalTypes = piece_set(COMMONER);
         return v;
     }
 
@@ -1054,8 +1052,9 @@ namespace {
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | DRAGON | ARCHBISHOP | CUSTOM_PIECE_2 | CUSTOM_PIECE_3;
         v->promotionLimit[COMMONER] = 2;
         v->enPassantRegion = 0;
-        v->extinctionPieceCount = 0;
-        v->extinctionPseudoRoyal = true;
+        v->extinctionValue = VALUE_NONE;
+        v->pseudoRoyalTypes = piece_set(COMMONER);
+        v->pseudoRoyalCount = 1;
         v->dupleCheck = true;
         return v;
     }
@@ -1082,10 +1081,8 @@ namespace {
     // https://www.chessvariants.com/winning.dir/coregal.html
     Variant* coregal_variant() {
         Variant* v = chess_variant_base()->init();
-        v->extinctionValue = -VALUE_MATE;
-        v->extinctionPieceTypes = piece_set(QUEEN);
-        v->extinctionPseudoRoyal = true;
-        v->extinctionPieceCount = 64; // no matter how many queens, all are royal
+        v->pseudoRoyalTypes = piece_set(QUEEN);
+        v->pseudoRoyalCount = 64; // no matter how many queens, all are royal
         return v;
     }
     // Clobber
@@ -1231,10 +1228,8 @@ namespace {
         v->pieceDrops = false;
         v->promotedPieceType[CUSTOM_PIECE_1] = COMMONER;
         v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
-        v->extinctionValue = -VALUE_MATE;
-        v->extinctionPieceTypes = piece_set(COMMONER);
-        v->extinctionPseudoRoyal = true;
-        v->extinctionPieceCount = 0;
+        v->pseudoRoyalTypes = piece_set(COMMONER);
+        v->pseudoRoyalCount = 1;
         return v;
     }
     // Yari shogi
@@ -1918,6 +1913,11 @@ Variant* Variant::conclude() {
         doubleStepRegion[WHITE] = doubleStepRegion[BLACK] = 0;
     if (!doubleStepRegion[WHITE] && !doubleStepRegion[BLACK])
         doubleStep = false;
+    if (extinctionValue == VALUE_NONE || !(extinctionPieceTypes & pieceTypes))
+    {
+        extinctionValue = VALUE_NONE;
+        extinctionPieceTypes = NO_PIECE_SET;
+    }
 
     // Determine optimizations
     bool restrictedMobility = false;
@@ -1940,6 +1940,7 @@ Variant* Variant::conclude() {
 
     // Initialize calculated NNUE properties
     nnueKing =  pieceTypes & KING ? KING
+              : pseudoRoyalCount == 1 && popcount(pseudoRoyalTypes) == 1 ? lsb(pseudoRoyalTypes)
               : extinctionPieceCount == 0 && (extinctionPieceTypes & COMMONER) ? COMMONER
               : NO_PIECE_TYPE;
     // The nnueKing has to present exactly once and must not change in count
@@ -2020,6 +2021,7 @@ Variant* Variant::conclude() {
     // For endgame evaluation to be applicable, no special win rules must apply.
     // Furthermore, rules significantly changing game mechanics also invalidate it.
     endgameEval = extinctionValue == VALUE_NONE
+                  && !pseudoRoyalTypes
                   && checkmateValue == -VALUE_MATE
                   && stalemateValue == VALUE_DRAW
                   && !materialCounting
