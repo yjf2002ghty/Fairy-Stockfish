@@ -9,6 +9,8 @@ on:
     branches:
       - master
       - tools
+  workflow_dispatch:
+    
 jobs:
   Stockfish:
     name: ${{ matrix.config.name }}
