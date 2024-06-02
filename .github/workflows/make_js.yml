@@ -1,0 +1,43 @@
+name: Make_js
+
+on:
+  push:
+    branches: [ make_js ]
+  pull_request:
+    branches: [ make_js ]
+
+env:
+  EM_VERSION: 1.39.16
+  EM_CACHE_FOLDER: 'emsdk-cache'
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        node-version: [12.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup cache
+        id: cache-system-libraries
+        uses: actions/cache@v2
+        with:
+          path: ${{env.EM_CACHE_FOLDER}}
+          key: emsdk-${{env.EM_VERSION}}-${{ runner.os }}
+      - uses: mymindstorm/setup-emsdk@v7
+        with:
+          version: ${{env.EM_VERSION}}
+          actions-cache-folder: ${{env.EM_CACHE_FOLDER}}
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Build ffishjs-es6
+        working-directory: src
+        run: make -f Makefile_js build es6=yes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffishjs
+          path: tests/js/*
